@@ -36,6 +36,11 @@ function getPhaseSeconds(ex: Exercise, phase: TempoPhase): number {
   return ex.tempo[phase];
 }
 
+function getInitialPhaseTime(ex: Exercise): number {
+  if (ex.mode === "timer") return ex.timerSeconds;
+  return getPhaseSeconds(ex, getFirstActivePhase(ex));
+}
+
 function getNextActivePhase(
   ex: Exercise,
   current: TempoPhase
@@ -135,10 +140,9 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
   const [phase, setPhase] = useState<TempoPhase>(() =>
     getFirstActivePhase(exercises[0])
   );
-  const [phaseTime, setPhaseTime] = useState(() => {
-    const p = getFirstActivePhase(exercises[0]);
-    return getPhaseSeconds(exercises[0], p);
-  });
+  const [phaseTime, setPhaseTime] = useState(() =>
+    getInitialPhaseTime(exercises[0])
+  );
   const [isResting, setIsResting] = useState(false);
   const [restTime, setRestTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -180,6 +184,51 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
       return;
     }
 
+    // --- Timer mode ---
+    if (ex.mode === "timer") {
+      setPhaseTime((t) => {
+        const next = t - 1;
+        if (next > 0) return next;
+        // Timer set done
+        setSetIdx((si) => {
+          const newSet = si + 1;
+          if (newSet >= totalSets) {
+            setExerciseIdx((ei) => {
+              const newEi = ei + 1;
+              if (newEi >= exercises.length) {
+                snd?.workoutDone();
+                setIsComplete(true);
+                setIsRunning(false);
+                return ei;
+              }
+              snd?.setDone();
+              const nextEx = exercises[newEi];
+              if (nextEx.mode !== "timer") {
+                const fp = getFirstActivePhase(nextEx);
+                setPhase(fp);
+                setPhaseTime(getPhaseSeconds(nextEx, fp));
+              } else {
+                setPhaseTime(nextEx.timerSeconds);
+              }
+              setIsResting(true);
+              setRestTime(ex.restSeconds);
+              snd?.restStart();
+              return newEi;
+            });
+            return 0;
+          }
+          snd?.setDone();
+          setIsResting(true);
+          setRestTime(ex.restSeconds);
+          snd?.restStart();
+          return newSet;
+        });
+        return 0;
+      });
+      return;
+    }
+
+    // --- Reps mode ---
     setPhaseTime((t) => {
       if (t > 1) return t - 1;
 
@@ -206,9 +255,13 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
                   }
                   snd?.setDone();
                   const nextEx = exercises[newEi];
-                  const fp = getFirstActivePhase(nextEx);
-                  setPhase(fp);
-                  setPhaseTime(getPhaseSeconds(nextEx, fp));
+                  if (nextEx.mode !== "timer") {
+                    const fp = getFirstActivePhase(nextEx);
+                    setPhase(fp);
+                    setPhaseTime(getPhaseSeconds(nextEx, fp));
+                  } else {
+                    setPhaseTime(nextEx.timerSeconds);
+                  }
                   setIsResting(true);
                   setRestTime(ex.restSeconds);
                   snd?.restStart();
@@ -251,9 +304,13 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
   // Reset phase/time when exercise changes
   useEffect(() => {
     if (!isResting) {
-      const fp = getFirstActivePhase(ex);
-      setPhase(fp);
-      setPhaseTime(getPhaseSeconds(ex, fp));
+      if (ex.mode === "timer") {
+        setPhaseTime(ex.timerSeconds);
+      } else {
+        const fp = getFirstActivePhase(ex);
+        setPhase(fp);
+        setPhaseTime(getPhaseSeconds(ex, fp));
+      }
     }
   }, [exerciseIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -366,7 +423,9 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
       <div className="text-center">
         <h2 className="text-2xl font-bold text-white">{ex.name}</h2>
         <p className="text-gray-400 text-sm mt-1">
-          {ex.tempo.phase1}-{ex.tempo.hold1}-{ex.tempo.phase2}-{ex.tempo.hold2} tempo
+          {ex.mode === "timer"
+            ? `${ex.timerSeconds}s hold · ${ex.sets} set${ex.sets !== 1 ? "s" : ""}`
+            : `${ex.tempo.phase1}-${ex.tempo.hold1}-${ex.tempo.phase2}-${ex.tempo.hold2} tempo`}
         </p>
       </div>
 
@@ -400,6 +459,26 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
             Skip Rest
           </button>
         </div>
+      ) : ex.mode === "timer" ? (
+        // Timer mode: big orange countdown
+        <div className="relative flex items-center justify-center w-52 h-52">
+          <svg className="absolute inset-0 -rotate-90" width="208" height="208">
+            <circle cx="104" cy="104" r="80" fill="none" stroke="#1f2937" strokeWidth="12" />
+            <circle
+              cx="104" cy="104" r="80" fill="none"
+              stroke="#f97316"
+              strokeWidth="12"
+              strokeDasharray={2 * Math.PI * 80}
+              strokeDashoffset={2 * Math.PI * 80 * (1 - phaseTime / ex.timerSeconds)}
+              strokeLinecap="round"
+              style={{ transition: "stroke-dashoffset 0.25s linear" }}
+            />
+          </svg>
+          <div className="z-10 flex flex-col items-center">
+            <span className="text-sm font-semibold text-orange-400 uppercase tracking-wider">Hold</span>
+            <span className="text-5xl font-bold text-white">{formatTime(phaseTime)}</span>
+          </div>
+        </div>
       ) : (
         <CircleProgress
           value={phaseTime}
@@ -416,25 +495,39 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
       )}
 
       {/* Rep / Set counter */}
-      <div className="flex gap-8 text-center">
-        <div>
-          <div className="text-4xl font-bold text-white">{repIdx + 1}</div>
-          <div className="text-xs text-gray-500 uppercase tracking-wider">Rep</div>
+      {ex.mode === "reps" ? (
+        <div className="flex gap-8 text-center">
+          <div>
+            <div className="text-4xl font-bold text-white">{repIdx + 1}</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wider">Rep</div>
+          </div>
+          <div className="w-px bg-gray-800" />
+          <div>
+            <div className="text-4xl font-bold text-white">{totalReps}</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wider">Target</div>
+          </div>
+          <div className="w-px bg-gray-800" />
+          <div>
+            <div className="text-4xl font-bold text-white">{setIdx + 1}</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wider">Set</div>
+          </div>
         </div>
-        <div className="w-px bg-gray-800" />
-        <div>
-          <div className="text-4xl font-bold text-white">{totalReps}</div>
-          <div className="text-xs text-gray-500 uppercase tracking-wider">Target</div>
+      ) : (
+        <div className="flex gap-8 text-center">
+          <div>
+            <div className="text-4xl font-bold text-white">{setIdx + 1}</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wider">Set</div>
+          </div>
+          <div className="w-px bg-gray-800" />
+          <div>
+            <div className="text-4xl font-bold text-white">{totalSets}</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wider">Total Sets</div>
+          </div>
         </div>
-        <div className="w-px bg-gray-800" />
-        <div>
-          <div className="text-4xl font-bold text-white">{setIdx + 1}</div>
-          <div className="text-xs text-gray-500 uppercase tracking-wider">Set</div>
-        </div>
-      </div>
+      )}
 
-      {/* Phase dots */}
-      {!isResting && (
+      {/* Phase dots — reps mode only */}
+      {!isResting && ex.mode === "reps" && (
         <div className="flex gap-3">
           {PHASE_ORDER.map((p) => {
             const sec = getPhaseSeconds(ex, p);
@@ -449,8 +542,8 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
         </div>
       )}
 
-      {/* Sound legend */}
-      {soundOn && !isResting && (
+      {/* Sound legend — reps mode only */}
+      {soundOn && !isResting && ex.mode === "reps" && (
         <div className="flex gap-4 text-xs text-gray-600">
           <span className="text-blue-500/60">↓ low tone</span>
           <span className="text-yellow-500/60">◆ click</span>
@@ -480,7 +573,9 @@ export default function WorkoutSession({ workout, onFinish }: Props) {
           <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Up next</p>
           <p className="text-gray-300 font-medium">{exercises[exerciseIdx + 1].name}</p>
           <p className="text-xs text-gray-500">
-            {exercises[exerciseIdx + 1].sets} sets × {exercises[exerciseIdx + 1].reps} reps
+            {exercises[exerciseIdx + 1].mode === "timer"
+              ? `${exercises[exerciseIdx + 1].sets} sets × ${exercises[exerciseIdx + 1].timerSeconds}s`
+              : `${exercises[exerciseIdx + 1].sets} sets × ${exercises[exerciseIdx + 1].reps} reps`}
           </p>
         </div>
       )}

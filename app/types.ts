@@ -8,8 +8,10 @@ export interface Tempo {
 export interface Exercise {
   id: string;
   name: string;
+  mode: "reps" | "timer";
   sets: number;
-  reps: number;
+  reps: number;          // used when mode === "reps"
+  timerSeconds: number;  // used when mode === "timer"
   tempo: Tempo;
   restSeconds: number; // rest between sets in seconds
 }

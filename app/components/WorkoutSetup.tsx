@@ -11,8 +11,10 @@ interface Props {
 
 const DEFAULT_EXERCISE: Omit<Exercise, "id"> = {
   name: "",
+  mode: "reps",
   sets: 3,
   reps: 10,
+  timerSeconds: 30,
   tempo: { phase1: 3, hold1: 1, phase2: 2, hold2: 0 },
   restSeconds: 120,
 };
@@ -179,6 +181,32 @@ export default function WorkoutSetup({ onStart }: Props) {
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
               />
 
+              {/* Mode toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-700 w-fit">
+                <button
+                  type="button"
+                  onClick={() => updateExercise(ex.id, { mode: "reps" })}
+                  className={`px-5 py-2 text-sm font-semibold transition-colors ${
+                    ex.mode === "reps"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-800 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Reps
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateExercise(ex.id, { mode: "timer" })}
+                  className={`px-5 py-2 text-sm font-semibold transition-colors ${
+                    ex.mode === "timer"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-800 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Timer
+                </button>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Sets</label>
@@ -192,18 +220,34 @@ export default function WorkoutSetup({ onStart }: Props) {
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Reps</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={ex.reps}
-                    onChange={(e) =>
-                      updateExercise(ex.id, { reps: Number(e.target.value) })
-                    }
-                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
-                  />
-                </div>
+                {ex.mode === "reps" ? (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Reps</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={ex.reps}
+                      onChange={(e) =>
+                        updateExercise(ex.id, { reps: Number(e.target.value) })
+                      }
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Duration (sec)</label>
+                    <input
+                      type="number"
+                      min={5}
+                      step={5}
+                      value={ex.timerSeconds}
+                      onChange={(e) =>
+                        updateExercise(ex.id, { timerSeconds: Number(e.target.value) })
+                      }
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Rest (sec)</label>
                   <input
@@ -221,24 +265,31 @@ export default function WorkoutSetup({ onStart }: Props) {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs text-gray-400 mb-2">
-                  Tempo (seconds per phase)
-                </label>
-                <TempoInput
-                  tempo={ex.tempo}
-                  onChange={(tempo) => updateExercise(ex.id, { tempo })}
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  {ex.tempo.phase1}-{ex.tempo.hold1}-{ex.tempo.phase2}-
-                  {ex.tempo.hold2} ·{" "}
-                  {ex.tempo.phase1 +
-                    ex.tempo.hold1 +
-                    ex.tempo.phase2 +
-                    ex.tempo.hold2}
-                  s per rep · Rest: {formatRestLabel(ex.restSeconds)}
+              {ex.mode === "reps" && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">
+                    Tempo (seconds per phase)
+                  </label>
+                  <TempoInput
+                    tempo={ex.tempo}
+                    onChange={(tempo) => updateExercise(ex.id, { tempo })}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {ex.tempo.phase1}-{ex.tempo.hold1}-{ex.tempo.phase2}-
+                    {ex.tempo.hold2} ·{" "}
+                    {ex.tempo.phase1 +
+                      ex.tempo.hold1 +
+                      ex.tempo.phase2 +
+                      ex.tempo.hold2}
+                    s per rep · Rest: {formatRestLabel(ex.restSeconds)}
+                  </p>
+                </div>
+              )}
+              {ex.mode === "timer" && (
+                <p className="text-xs text-gray-500">
+                  {ex.sets} set{ex.sets !== 1 ? "s" : ""} × {formatRestLabel(ex.timerSeconds)} · Rest: {formatRestLabel(ex.restSeconds)}
                 </p>
-              </div>
+              )}
             </div>
           </div>
         ))}
