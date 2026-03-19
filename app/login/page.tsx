@@ -1,0 +1,64 @@
+"use client";
+
+import { useActionState } from "react";
+import { login } from "@/app/actions/auth";
+import Link from "next/link";
+
+const initialState = { error: undefined as string | undefined };
+
+export default function LoginPage() {
+  const [state, formAction, pending] = useActionState(login, initialState);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <h1 className="text-4xl font-bold text-orange-500 mb-2 text-center">
+          RepTempo
+        </h1>
+        <p className="text-gray-400 text-center mb-8">Sign in to your account</p>
+
+        <form action={formAction} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Password</label>
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+            />
+          </div>
+
+          {state?.error && (
+            <p className="text-red-400 text-sm">{state.error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 rounded-xl text-white font-bold transition-colors"
+          >
+            {pending ? "Signing in…" : "Sign In"}
+          </button>
+        </form>
+
+        <p className="text-center text-gray-500 text-sm mt-6">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="text-orange-400 hover:text-orange-300">
+            Sign up
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}

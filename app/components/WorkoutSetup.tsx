@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Exercise, WorkoutConfig, Tempo } from "../types";
+import { saveWorkout } from "@/app/actions/workouts";
 
 interface Props {
-  onStart: (config: WorkoutConfig) => void;
+  onStart: (config: WorkoutConfig, name: string) => void;
 }
 
 const DEFAULT_EXERCISE: Omit<Exercise, "id"> = {
@@ -55,9 +57,12 @@ function TempoInput({
 }
 
 export default function WorkoutSetup({ onStart }: Props) {
+  const [workoutName, setWorkoutName] = useState("");
   const [exercises, setExercises] = useState<Exercise[]>([
     { ...DEFAULT_EXERCISE, id: generateId() },
   ]);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
 
   function addExercise() {
     setExercises((prev) => [
@@ -76,13 +81,35 @@ export default function WorkoutSetup({ onStart }: Props) {
     );
   }
 
+  function validate() {
+    return exercises.every((e) => e.name.trim());
+  }
+
   function handleStart() {
-    const valid = exercises.every((e) => e.name.trim());
-    if (!valid) {
+    if (!validate()) {
       alert("Please give each exercise a name.");
       return;
     }
-    onStart({ exercises });
+    onStart({ exercises }, workoutName || "My Workout");
+  }
+
+  async function handleSave() {
+    if (!validate()) {
+      alert("Please give each exercise a name.");
+      return;
+    }
+    const name = workoutName.trim() || "My Workout";
+    setSaving(true);
+    setSaveStatus("idle");
+    const result = await saveWorkout(name, exercises);
+    setSaving(false);
+    if (result?.error) {
+      setSaveStatus("error");
+    } else {
+      setSaveStatus("saved");
+      setWorkoutName(name);
+      setTimeout(() => setSaveStatus("idle"), 2500);
+    }
   }
 
   function formatRestLabel(seconds: number) {
@@ -93,9 +120,34 @@ export default function WorkoutSetup({ onStart }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-orange-500 mb-2">RepTempo</h1>
-        <p className="text-gray-400">Set up your workout and let the app count for you</p>
+      {/* Header */}
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-orange-500">RepTempo</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Set up your workout and let the app count for you
+          </p>
+        </div>
+        <Link
+          href="/dashboard"
+          className="text-sm text-gray-500 hover:text-white transition-colors"
+        >
+          ← Dashboard
+        </Link>
+      </div>
+
+      {/* Workout Name */}
+      <div className="mb-6">
+        <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider">
+          Workout Name
+        </label>
+        <input
+          type="text"
+          placeholder="e.g. Push Day, Leg Day…"
+          value={workoutName}
+          onChange={(e) => setWorkoutName(e.target.value)}
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 text-lg font-medium"
+        />
       </div>
 
       <div className="space-y-6">
@@ -134,7 +186,9 @@ export default function WorkoutSetup({ onStart }: Props) {
                     type="number"
                     min={1}
                     value={ex.sets}
-                    onChange={(e) => updateExercise(ex.id, { sets: Number(e.target.value) })}
+                    onChange={(e) =>
+                      updateExercise(ex.id, { sets: Number(e.target.value) })
+                    }
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
                   />
                 </div>
@@ -144,7 +198,9 @@ export default function WorkoutSetup({ onStart }: Props) {
                     type="number"
                     min={1}
                     value={ex.reps}
-                    onChange={(e) => updateExercise(ex.id, { reps: Number(e.target.value) })}
+                    onChange={(e) =>
+                      updateExercise(ex.id, { reps: Number(e.target.value) })
+                    }
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
                   />
                 </div>
@@ -156,7 +212,9 @@ export default function WorkoutSetup({ onStart }: Props) {
                     step={15}
                     value={ex.restSeconds}
                     onChange={(e) =>
-                      updateExercise(ex.id, { restSeconds: Number(e.target.value) })
+                      updateExercise(ex.id, {
+                        restSeconds: Number(e.target.value),
+                      })
                     }
                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
                   />
@@ -172,9 +230,13 @@ export default function WorkoutSetup({ onStart }: Props) {
                   onChange={(tempo) => updateExercise(ex.id, { tempo })}
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  {ex.tempo.phase1}-{ex.tempo.hold1}-{ex.tempo.phase2}-{ex.tempo.hold2} ·{" "}
-                  {ex.tempo.phase1 + ex.tempo.hold1 + ex.tempo.phase2 + ex.tempo.hold2}s per rep ·{" "}
-                  Rest: {formatRestLabel(ex.restSeconds)}
+                  {ex.tempo.phase1}-{ex.tempo.hold1}-{ex.tempo.phase2}-
+                  {ex.tempo.hold2} ·{" "}
+                  {ex.tempo.phase1 +
+                    ex.tempo.hold1 +
+                    ex.tempo.phase2 +
+                    ex.tempo.hold2}
+                  s per rep · Rest: {formatRestLabel(ex.restSeconds)}
                 </p>
               </div>
             </div>
@@ -186,6 +248,21 @@ export default function WorkoutSetup({ onStart }: Props) {
           className="w-full py-3 border-2 border-dashed border-gray-700 rounded-2xl text-gray-500 hover:border-orange-500 hover:text-orange-400 transition-colors"
         >
           + Add Exercise
+        </button>
+
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full py-3 border border-orange-500 rounded-2xl text-orange-400 hover:bg-orange-500 hover:text-white font-semibold transition-colors disabled:opacity-50"
+        >
+          {saving
+            ? "Saving…"
+            : saveStatus === "saved"
+            ? "✓ Saved to dashboard"
+            : saveStatus === "error"
+            ? "Error saving — try again"
+            : "Save Workout"}
         </button>
 
         <button

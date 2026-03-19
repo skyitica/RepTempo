@@ -31,3 +31,18 @@ export interface SessionState {
   isRunning: boolean;
   isComplete: boolean;
 }
+
+export interface SavedWorkout {
+  id: string;
+  name: string;
+  exercises: Exercise[];
+  created_at: string;
+}
+
+export interface WorkoutLog {
+  id: string;
+  workout_name: string;
+  exercises: Exercise[];
+  completed_at: string;
+  duration_seconds: number | null;
+}
